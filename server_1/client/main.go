@@ -29,6 +29,7 @@ func measureConnectionTime(address string, timeout time.Duration) {
 	for {
 		_, err := conn.Read(buf)
 		if err != nil {
+			fmt.Println("read error:", err)
 			break
 		}
 	}
@@ -39,21 +40,21 @@ func measureConnectionTime(address string, timeout time.Duration) {
 
 func main() {
 	// Addresses of the servers to test
-	addr := "localhost"
-	connectTimeoutServer := addr + ":8081"
-	sendTimeoutServer := addr + ":8082"
-	receiveTimeoutServer := addr + ":8083"
+	addr := "54.151.145.87"
+	// connectTimeoutServer := addr + ":80"
+	// sendTimeoutServer := addr + ":8082"
+	receiveTimeoutServer := addr + ":82"
 
 	// Timeout for connecting to the server
-	connectTimeout := 5 * time.Second
+	connectTimeout := 5 * time.Minute
 
 	// Measure connection time for connect timeout server
-	fmt.Println("Testing connect timeout server...")
-	measureConnectionTime(connectTimeoutServer, connectTimeout)
+	// fmt.Println("Testing connect timeout server...")
+	// measureConnectionTime(connectTimeoutServer, connectTimeout)
 
-	// Measure connection time for send timeout server
-	fmt.Println("Testing send timeout server...")
-	measureConnectionTime(sendTimeoutServer, connectTimeout)
+	// // Measure connection time for send timeout server
+	// fmt.Println("Testing send timeout server...")
+	// measureConnectionTime(sendTimeoutServer, connectTimeout)
 
 	// Measure connection time for receive timeout server
 	fmt.Println("Testing receive timeout server...")

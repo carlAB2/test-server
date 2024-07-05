@@ -133,7 +133,7 @@ func main() {
 	})
 
 	log.Println("Starting server on :8080")
-	go startTCPServer(":8082", handleSendTimeout)   // Server for simulating send timeout
-	go startTCPServer(":8083", handleReceiveTimeout) // Server for simulating receive timeout
+	go startTCPServer(":8083", handleSendTimeout)   // Server for simulating send timeout
+	go startTCPServer(":8082", handleReceiveTimeout) // Server for simulating receive timeout
 	log.Fatal(server.Serve(loggingLn))
 }
