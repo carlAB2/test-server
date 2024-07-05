@@ -60,6 +60,58 @@ func (c *loggingConn) Close() error {
 	return c.Conn.Close()
 }
 
+// Simulate sending timeout
+func handleSendTimeout(conn net.Conn) {
+	defer conn.Close()
+	log.Println("Connection established, simulating send timeout...")
+
+	// Read from the connection to simulate receiving data but do not send ACK
+	buf := make([]byte, 1024)
+	_, err := conn.Read(buf)
+	if err != nil {
+		log.Printf("Error reading from connection: %v", err)
+		return
+	}
+
+	// Simulate delay without sending a response
+	time.Sleep(30 * time.Minute) // Adjust the time as needed
+}
+
+// Simulate receiving timeout
+func handleReceiveTimeout(conn net.Conn) {
+	defer conn.Close()
+	log.Println("Connection established, simulating receive timeout...")
+
+	// Read from the connection to simulate receiving data
+	buf := make([]byte, 1024)
+	_, err := conn.Read(buf)
+	if err != nil {
+		log.Printf("Error reading from connection: %v", err)
+		return
+	}
+
+	// Simulate delay without sending a full response
+	time.Sleep(30 * time.Minute) // Adjust the time as needed
+}
+
+func startTCPServer(addr string, handler func(net.Conn)) {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalf("Error starting TCP server: %v", err)
+	}
+	defer listener.Close()
+	log.Printf("TCP server listening on %s", addr)
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("Error accepting connection: %v", err)
+			continue
+		}
+		go handler(conn)
+	}
+}
+
 func main() {
 	handler := &loggingHandler{handler: http.DefaultServeMux}
 
@@ -81,5 +133,7 @@ func main() {
 	})
 
 	log.Println("Starting server on :8080")
+	go startTCPServer(":8082", handleSendTimeout)   // Server for simulating send timeout
+	go startTCPServer(":8083", handleReceiveTimeout) // Server for simulating receive timeout
 	log.Fatal(server.Serve(loggingLn))
 }
