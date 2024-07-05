@@ -1,65 +1,85 @@
 package main
 
 import (
-    "fmt"
-    "log"
-    "net"
-    "net/http"
-    "sync"
-    "time"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"sync"
+	"time"
 )
 
 var (
-    connStartTimes sync.Map
+	connStartTimes sync.Map
 )
 
 type loggingHandler struct {
-    handler http.Handler
+	handler http.Handler
 }
 
 func (h *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    conn, ok := r.Context().Value(http.LocalAddrContextKey).(net.Conn)
-    if !ok {
-        http.Error(w, "could not get connection", http.StatusInternalServerError)
-        return
-    }
+	remoteAddr := r.RemoteAddr
+	startTime, ok := connStartTimes.Load(remoteAddr)
+	if ok {
+		duration := time.Since(startTime.(time.Time))
+		log.Printf("Request from %s, connection duration: %v", remoteAddr, duration)
+	}
 
-    addr := conn.RemoteAddr().String()
+	h.handler.ServeHTTP(w, r)
+}
 
-    // Log the start time for this connection
-    if _, exists := connStartTimes.LoadOrStore(addr, time.Now()); !exists {
-        log.Printf("New connection from %s", addr)
-    }
+type loggingListener struct {
+	net.Listener
+}
 
-    h.handler.ServeHTTP(w, r)
+func (l *loggingListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+
+	remoteAddr := conn.RemoteAddr().String()
+	connStartTimes.Store(remoteAddr, time.Now())
+	log.Printf("New connection from %s", remoteAddr)
+
+	return &loggingConn{Conn: conn, remoteAddr: remoteAddr}, nil
+}
+
+type loggingConn struct {
+	net.Conn
+	remoteAddr string
+}
+
+func (c *loggingConn) Close() error {
+	startTime, ok := connStartTimes.Load(c.remoteAddr)
+	if ok {
+		duration := time.Since(startTime.(time.Time))
+		log.Printf("Connection from %s closed after %v", c.remoteAddr, duration)
+		connStartTimes.Delete(c.remoteAddr)
+	}
+	return c.Conn.Close()
 }
 
 func main() {
-    handler := &loggingHandler{handler: http.DefaultServeMux}
+	handler := &loggingHandler{handler: http.DefaultServeMux}
 
-    server := &http.Server{
-        Addr:    ":8080",
-        Handler: handler,
-        ConnState: func(c net.Conn, cs http.ConnState) {
-            addr := c.RemoteAddr().String()
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: handler,
+	}
 
-            switch cs {
-            case http.StateNew:
-                log.Printf("New connection: %s", addr)
-            case http.StateClosed:
-                if startTime, ok := connStartTimes.Load(addr); ok {
-                    duration := time.Since(startTime.(time.Time))
-                    log.Printf("Connection from %s closed after %v", addr, duration)
-                    connStartTimes.Delete(addr)
-                }
-            }
-        },
-    }
+	// Create a custom listener that wraps net.Listener
+	ln, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		log.Fatalf("Error creating listener: %v", err)
+	}
 
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-        fmt.Fprintln(w, "Hello, World!")
-    })
+	loggingLn := &loggingListener{Listener: ln}
 
-    log.Println("Starting server on :8080")
-    log.Fatal(server.ListenAndServe())
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello, World!")
+	})
+
+	log.Println("Starting server on :8080")
+	log.Fatal(server.Serve(loggingLn))
 }
